@@ -10,6 +10,7 @@ LF		equ		10
 	text_file  		db CR,LF,"Arquivo Escolhido: ", 0
 	text_openerr	db CR,LF,"Erro ao tentar abrir o arquivo!",CR,LF,0
 	text_opensuc	db CR,LF,"Sucesso ao abrir o arquivo!",CR,LF,0
+	text_digiterr	db CR,LF,"Digito Invalido!",CR,LF,0
 	values			dw 0,0,0,0
 
 	file_handle		dw 0
@@ -18,6 +19,9 @@ LF		equ		10
 .code
 .startup
 
+	;;------------------------------
+	;; Getting the filename.
+	;;------------------------------
 	lea 	bx , text_intro
 	call 	print_string
 
@@ -31,25 +35,95 @@ LF		equ		10
 	call	print_string
 
 	;;------------------------------
-
+	;; Opening the file and checking
+	;;------------------------------
 	call 	open_file
 
 	lea		di, file_handle
 	cmp		[di],0
 
-	jz		did_not_open
-
-
-	lea		bx , text_opensuc
+	jnz		main_open_success
+	lea		bx , text_openerr
 	call	print_string
 	jmp 	end_main
 
-did_not_open:
-	lea		bx , text_openerr
+	;;------------------------------
+	;; Parsing the file.
+	;;------------------------------
+main_open_success:
+	lea		bx , text_opensuc
 	call	print_string
 
+	;;------------------------------
+	;; Printing the results.
+	;;------------------------------
+
+
+
 end_main:
+	mov		ax,7
+	call print_digit
+
+	mov		ax,5
+	call print_digit
+
+	mov		ax,11
+	call print_digit
+
 .exit
+
+
+;================================
+; PRINT_NUMBER (number enters at AX)
+;================================
+;; prints in base 16, and with trailing zeroes.
+print_number proc near
+	push 	bx
+
+
+
+	pop 	bx
+	ret
+print_number endp
+
+;================================
+; PRINT_DIGIT (n, 0 <= n < 16, at AX)
+;================================
+;; prints a single 'digit' in base 16.
+print_digit proc near
+	push bx
+	push dx
+
+	cmp 	ax, 16
+	jnc print_digit_too_large
+
+	cmp 	ax,9
+	jnc 	print_digit_letter
+
+print_digit_number:
+	mov 	dl, '0'
+	jmp 	print_digit_print
+print_digit_letter:
+	mov 	dl, 'A'
+	sub		dl, 10	;; já começa em 10, 
+
+print_digit_print:
+	add 	dl, al
+	mov 	ah, 02H
+	int		21h
+
+	jmp print_digit_end
+
+
+print_digit_too_large:
+	lea 	bx,text_digiterr
+	call 	print_string
+
+print_digit_end:
+	pop 	dx
+	pop 	bx
+	ret
+print_digit endp
 
 ;================================
 ; OPEN_FILE	(file_handle=0 if failure)
@@ -76,7 +150,6 @@ open_success:
 
 	; fallthrough
 open_end:
-
 	pop		dx
 	pop		ax
 	ret
