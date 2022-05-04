@@ -6,18 +6,19 @@ LF		equ		10
 
 .stack
 .data
-	hello_world db "Hello, World!",CR,LF,0
-	str_result  db "Resultado: ", CR, LF, 0
+	text_intro db "Digite o nome do arquivo (max:12)",CR,LF,">>> ",0
+	text_file  db CR,LF,"Arquivo Escolhido: ", 0
 	filename db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	values	dw 0,0,0,0
 .code
 .startup
-	lea 	bx , hello_world
+	lea 	bx , text_intro
 	call 	print_string
 
+	mov		bx, 12
 	call 	read_filename
 
-	lea 	bx , str_result
+	lea 	bx , text_file
 	call 	print_string
 
 	lea		bx , filename
@@ -26,7 +27,7 @@ LF		equ		10
 .exit
 
 ;================================
-; READ_FILENAME (name->data.filename)
+; READ_FILENAME (bx=maxchars, name->data.filename)
 ;================================
 read_filename proc near
 
@@ -46,13 +47,19 @@ read_loop:
 	int		21H
 	cmp		al,CR
 	jne		read_naoacabou
+
+read_acabou:
 	mov		byte ptr[di], 0
 
 	jmp read_fim
 
 read_naoacabou:
-	mov	byte ptr[di], al
-	inc dx
+	cmp 	bx, 0
+	je		read_acabou
+
+	mov		byte ptr[di], al
+	inc 	dx
+	dec 	bx
 	jmp 	read_loop
 
 read_fim:
