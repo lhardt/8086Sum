@@ -6,12 +6,18 @@ LF		equ		10
 
 .stack
 .data
-	text_intro db "Digite o nome do arquivo (max:12)",CR,LF,">>> ",0
-	text_file  db CR,LF,"Arquivo Escolhido: ", 0
-	filename db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-	values	dw 0,0,0,0
+	text_intro 		db "Digite o nome do arquivo (max:12)",CR,LF,">>> ",0
+	text_file  		db CR,LF,"Arquivo Escolhido: ", 0
+	text_openerr	db CR,LF,"Erro ao tentar abrir o arquivo!",CR,LF,0
+	text_opensuc	db CR,LF,"Sucesso ao abrir o arquivo!",CR,LF,0
+	values			dw 0,0,0,0
+
+	file_handle		dw 0
+	filename 		db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
 .code
 .startup
+
 	lea 	bx , text_intro
 	call 	print_string
 
@@ -24,7 +30,57 @@ LF		equ		10
 	lea		bx , filename
 	call	print_string
 
+	;;------------------------------
+
+	call 	open_file
+
+	lea		di, file_handle
+	cmp		[di],0
+
+	jz		did_not_open
+
+
+	lea		bx , text_opensuc
+	call	print_string
+	jmp 	end_main
+
+did_not_open:
+	lea		bx , text_openerr
+	call	print_string
+
+end_main:
 .exit
+
+;================================
+; OPEN_FILE	(file_handle=0 if failure)
+;================================
+open_file proc near
+	push 	ax
+	push	dx
+
+	mov		ah, 3DH
+	mov		al, 0
+	lea		dx,filename
+
+	int 	21H ;; retorna carry flag 0 se ok
+
+	jnc		open_success
+
+	lea		di, file_handle
+	mov		[di], 0
+	jmp		open_end
+
+open_success:
+	lea		di, file_handle
+	mov		[di], ax
+
+	; fallthrough
+open_end:
+
+	pop		dx
+	pop		ax
+	ret
+open_file endp
 
 ;================================
 ; READ_FILENAME (bx=maxchars, name->data.filename)
