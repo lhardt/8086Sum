@@ -14,11 +14,14 @@ LF		equ		10
 	text_parseerr	db CR,LF,"Erro ao ler o arquivo ",CR,LF,0
 	text_space		db " ",0
 	text_charreport db CR,LF," Novo Byte: ",0
+	text_outfileis  db CR,LF,"O arquivo de saída eh: ",0
 	text_eof		db CR,LF,"EOF!",CR,LF,0
+	text_outext		db ".res",0
 	values			dw 0,0,0,0
 
 	file_handle		dw 0
 	filename 		db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	out_filename	db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 	file_buffer		db 0,0,0
 
@@ -41,6 +44,17 @@ LF		equ		10
 	call	print_string
 
 	;;------------------------------
+	;; Handling the output file
+	;;------------------------------
+	call	make_outfile_name
+
+	lea		bx, text_outfileis
+	call	print_string
+
+	lea		bx, out_filename
+	call	print_string
+
+	;;------------------------------
 	;; Opening the file and checking
 	;;------------------------------
 	call 	open_file
@@ -52,6 +66,7 @@ LF		equ		10
 	lea		bx , text_openerr
 	call	print_string
 	jmp 	end_main
+
 
 	;;------------------------------
 	;; Parsing the file.
@@ -109,16 +124,17 @@ parsefile_readnext:
 	cmp ax,0				;; number of bytes actually read.
 	jz	parsefile_eof
 
-	lea	bx,text_charreport
-	call print_string
+	call sumchar
 
-	lea	bx, file_buffer
-	mov	al, [bx]
-	call print_number
+	;; Printing the char for test purpouses.
+		lea	bx,text_charreport
+		call print_string
+
+		lea	bx, file_buffer
+		mov	al, [bx]
+		call print_number
 
 	jmp parsefile_readnext
-
-
 
 parsefile_error:
 	lea 	bx, text_parseerr
@@ -135,6 +151,19 @@ parsefile_end:
 
 	ret
 parse_file endp
+;================================
+; SUMCHAR	 (al=char)
+; checks if the char does contribute in the sum
+; sums at one of the four values accordingly.
+;================================
+sumchar proc near
+
+
+sumchar_invalid:
+sumchar_end:
+	ret
+
+sumchar endp
 ;================================
 ; PRINT_SPACE (no param, no result. Just covenience)
 ;================================
@@ -215,6 +244,50 @@ print_digit_end:
 	ret
 print_digit endp
 
+
+;================================
+; MAKE_OUTFILE_NAME (fills out_filename by looking at filename)
+;================================
+make_outfile_name proc near
+	lea di,out_filename
+	lea si,filename
+
+makename_next:
+	cmp byte ptr [si],0
+	jz  makename_extension
+
+	cmp byte ptr [si],'.'
+	jz	makename_extension
+
+	mov al, [si]
+	mov [di], al
+	inc di
+	inc si
+
+	jmp makename_next
+
+makename_extension:
+	lea si, text_outext
+
+makename_extloop:
+	cmp byte ptr [si],0
+	jz  makename_end
+	mov al, [si]
+	mov [di], al
+	inc di
+	inc si
+
+	jmp makename_extloop
+
+makename_end:
+	ret
+make_outfile_name endp
+;================================
+; OPEN_OUTFILE ()
+;================================
+open_outfile proc near
+	ret
+open_outfile endp
 ;================================
 ; OPEN_FILE	(file_handle=0 if failure)
 ;================================
