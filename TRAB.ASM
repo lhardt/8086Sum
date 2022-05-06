@@ -11,6 +11,7 @@ LF		equ		10
 	text_openerr	db CR,LF,"Erro ao tentar abrir o arquivo!",CR,LF,0
 	text_opensuc	db CR,LF,"Sucesso ao abrir o arquivo!",CR,LF,0
 	text_digiterr	db CR,LF,"Digito Invalido!",CR,LF,0
+	text_space		db " ",0
 	values			dw 0,0,0,0
 
 	file_handle		dw 0
@@ -61,43 +62,79 @@ main_open_success:
 
 
 end_main:
-	mov		ax,7
-	call print_digit
+	mov		al, 7AH
+	call print_number
+
+	call print_space
+
+	mov		ax,3
+	call print_number
+
+	call print_space
 
 	mov		ax,5
-	call print_digit
+	call print_number
+
+	call print_space
 
 	mov		ax,11
-	call print_digit
+	call print_number
 
 .exit
 
-
 ;================================
-; PRINT_NUMBER (number enters at AX)
+; PRINT_SPACE (no param, no result. Just covenience)
+;================================
+print_space proc near
+	push 	ax
+	push 	bx
+	push 	cx
+
+	lea		bx,text_space
+	call	print_string
+
+	pop		cx
+	pop		bx
+	pop 	ax
+
+	ret
+print_space endp
+;================================
+; PRINT_NUMBER (number enters at AL)
 ;================================
 ;; prints in base 16, and with trailing zeroes.
 print_number proc near
 	push 	bx
+	push	cx
 
+	mov		bl, al
 
+	mov		cl,4 ;; 8 bits, prints two 4-bit values
+	shr		al,cl
+	call	print_digit
+	shl		al,cl
+	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
+	mov		al,bl
+	call	print_digit
 
+	pop		cx
 	pop 	bx
+
 	ret
 print_number endp
 
 ;================================
-; PRINT_DIGIT (n, 0 <= n < 16, at AX)
+; PRINT_DIGIT (n, 0 <= n < 16, at AL)
 ;================================
 ;; prints a single 'digit' in base 16.
 print_digit proc near
 	push bx
 	push dx
 
-	cmp 	ax, 16
+	cmp 	al, 16
 	jnc print_digit_too_large
 
-	cmp 	ax,9
+	cmp 	al,9
 	jnc 	print_digit_letter
 
 print_digit_number:
@@ -105,7 +142,7 @@ print_digit_number:
 	jmp 	print_digit_print
 print_digit_letter:
 	mov 	dl, 'A'
-	sub		dl, 10	;; já começa em 10, 
+	sub		dl, 10	;; já começa em 10,
 
 print_digit_print:
 	add 	dl, al
