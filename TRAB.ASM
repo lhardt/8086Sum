@@ -11,11 +11,16 @@ LF		equ		10
 	text_openerr	db CR,LF,"Erro ao tentar abrir o arquivo!",CR,LF,0
 	text_opensuc	db CR,LF,"Sucesso ao abrir o arquivo!",CR,LF,0
 	text_digiterr	db CR,LF,"Digito Invalido!",CR,LF,0
+	text_parseerr	db CR,LF,"Erro ao ler o arquivo ",CR,LF,0
 	text_space		db " ",0
+	text_charreport db CR,LF," Novo Byte: ",0
+	text_eof		db CR,LF,"EOF!",CR,LF,0
 	values			dw 0,0,0,0
 
 	file_handle		dw 0
 	filename 		db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+	file_buffer		db 0,0,0
 
 .code
 .startup
@@ -55,6 +60,8 @@ main_open_success:
 	lea		bx , text_opensuc
 	call	print_string
 
+	call 	parse_file
+
 	;;------------------------------
 	;; Printing the results.
 	;;------------------------------
@@ -82,6 +89,52 @@ end_main:
 
 .exit
 
+;================================
+; PARSE_FILE  (no params, everything is global)
+;================================
+parse_file proc near
+	mov	bx,file_handle		;; - parameter
+	cmp bx,0
+	jz	parsefile_end
+
+parsefile_readnext:
+	mov ah, 3fH				;; "READ" interrupt
+	mov	bx,file_handle		;; - parameter
+	mov	cx,1				;; - parameter: numbytes to read
+	lea	dx, file_buffer		;; - parameter: DS:DX is the buffer
+
+	int 21h
+
+	jc	parsefile_error		;; error condition is carry flag.
+	cmp ax,0				;; number of bytes actually read.
+	jz	parsefile_eof
+
+	lea	bx,text_charreport
+	call print_string
+
+	lea	bx, file_buffer
+	mov	al, [bx]
+	call print_number
+
+	jmp parsefile_readnext
+
+
+
+parsefile_error:
+	lea 	bx, text_parseerr
+	call 	print_string
+	call	print_number	;; err code in ax, print_number prints al
+	jmp		parsefile_end
+
+parsefile_eof:
+
+	lea		bx, text_eof
+	call	print_string
+
+parsefile_end:
+
+	ret
+parse_file endp
 ;================================
 ; PRINT_SPACE (no param, no result. Just covenience)
 ;================================
@@ -241,6 +294,7 @@ read_filename endp
 ;================================
 print_string 	proc near
 print_start:
+
 	mov		dl, [bx]
 	cmp		dl, 0
 	je print_end
