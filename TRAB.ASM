@@ -65,13 +65,11 @@ LF		equ		10
 	;;------------------------------
 	call 	open_file
 
-	lea		di, file_handle
-	cmp		[di],0
+	cmp		file_handle,0
 	jz		main_open_fail
 
 	call	open_outfile
-	lea		di, out_filehandle
-	cmp		[di],0
+	cmp		out_filehandle,0
 	jz		main_open_fail
 
 	jmp		main_open_success
@@ -86,10 +84,20 @@ main_open_fail:
 	;; Parsing the file.
 	;;------------------------------
 main_open_success:
-	lea		bx , text_opensuc
-	call	print_string
 
-	call 	parse_file
+	mov		ah,40h
+	mov		bx,out_filehandle
+	mov		cx,20
+	mov		dx, offset text_opensuc
+	int 	21h
+
+;	lea		bx, text_opensuc
+;	call	fprint_string
+
+;	lea		bx , text_opensuc
+;	call	print_string
+
+;	call 	parse_file
 
 	;;------------------------------
 	;; Printing the results.
@@ -167,19 +175,21 @@ parse_file endp
 ;================================
 sumchar proc near
 
-	cmp al,7EH ; último caractere de controle é 0x1F, e o primeiro visível é 0x20
+	cmp al,7FH ; último caractere de controle é 0x1F, e o primeiro visível é 0x20
 	jnc sumchar_invalid
 
+
+	lea bx,values
+	add bx,values_i
+	add byte ptr [bx], al
+
+	call write_outfile
+
+	add values_i,1
 	cmp values_i,3 ; A ordem é 0,1,2,3,0,1,2,3 ... Reseta do 3 pro 0.
 	jnz sumchar_nao_overflow
 	mov	values_i,0
 sumchar_nao_overflow:
-
-	lea bx,values
-	add bx,values_i
-	add [bx], al
-
-	add values_i,1
 
 sumchar_invalid:
 sumchar_end:
@@ -228,6 +238,30 @@ print_number proc near
 print_number endp
 
 ;================================
+; FPRINT_NUMBER (number enters at AL)
+;================================
+;; prints in base 16, in the outfile, and with trailing zeroes.
+fprint_number proc near
+	push 	bx
+	push	cx
+
+	mov		bl, al
+
+	mov		cl,4 ;; 8 bits, prints two 4-bit values
+	shr		al,cl
+	call	fprint_digit
+	shl		al,cl
+	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
+	mov		al,bl
+	call	fprint_digit
+
+	pop		cx
+	pop 	bx
+
+	ret
+fprint_number endp
+
+;================================
 ; PRINT_DIGIT (n, 0 <= n < 16, at AL)
 ;================================
 ;; prints a single 'digit' in base 16.
@@ -265,6 +299,55 @@ print_digit_end:
 	pop 	bx
 	ret
 print_digit endp
+
+;================================
+; FPRINT_DIGIT (n, 0 <= n < 16, at AL)
+;================================
+;; prints a single 'digit' in base 16 at the outfile.
+fprint_digit proc near
+	push bx
+	push dx
+
+	cmp 	al, 16
+	jnc fprint_digit_too_large
+
+	cmp 	al,9
+	jnc 	fprint_digit_letter
+
+fprint_digit_number:
+	mov 	dl, '0'
+	jmp 	fprint_digit_print
+fprint_digit_letter:
+	mov 	dl, 'A'
+	sub		dl, 10	;; já começa em 10,
+
+fprint_digit_print:
+	add 	al, dl ;; so AL is the character to print
+
+	lea		di, file_buffer ;; we need to write using a buffer.
+	mov		byte ptr [di], al ;; character in the buffer
+	lea		dx, file_buffer ;; we need to write using a buffer.
+
+
+	mov		cx, 1 			;; one byte to write.
+	mov		bx, out_filehandle
+
+	mov 	ah, 40h
+	int		21h
+
+	jmp fprint_digit_end
+
+
+fprint_digit_too_large:
+	lea 	bx,text_digiterr
+	call 	print_string
+
+fprint_digit_end:
+	pop 	dx
+	pop 	bx
+	ret
+fprint_digit endp
+
 
 
 ;================================
@@ -323,14 +406,34 @@ open_outfile proc near
 	call print_string
 	jmp		openo_end
 openo_success:
-	lea		di, out_filehandle
-	mov		[di], ax
+	mov		out_filehandle, ax
 openo_end:
 	ret
 open_outfile endp
 ;================================
-; WRITE_OUTFILE (ax=)
+; WRITE_OUTFILE (al=byte)
 ;================================
+write_outfile proc near
+
+	call fprint_number
+
+	cmp values_i, 3
+	jnz write_not_newline
+
+	push ax
+
+	mov al, CR
+	call write_outfile
+	mov al, LF
+	call write_outfile
+
+	pop ax
+
+
+write_not_newline:
+
+	ret
+write_outfile endp
 
 ;================================
 ; OPEN_FILE	(file_handle=0 if failure)
@@ -407,6 +510,42 @@ read_fim:
 	pop		ax
 	ret
 read_filename endp
+
+;================================
+; FPRINT_STRING (bx=string)
+;================================
+fprint_string 	proc near
+fprint_start:
+
+	mov		dl, [bx]
+	cmp		dl, 0
+	je fprint_end
+
+	push	bx
+	push	cx
+
+		;mov		dx,bx ; dx must point to string
+		lea		dx, text_openerr
+
+		lea		bx,out_filehandle
+		mov		cx,1  ; n_bytes to write
+
+
+		mov		ah,40h
+		int 	21H
+
+	pop		cx
+	pop		bx
+
+	inc		bx
+	jmp		fprint_start
+
+
+fprint_end:
+	ret
+fprint_string endp
+
+;================================
 
 
 ;================================
