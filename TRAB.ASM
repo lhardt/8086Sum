@@ -131,30 +131,18 @@ print_sums_to_file proc near
 	lea bx,values
 
 	mov  al,[bx]
-	call fprint_number
+	call fprint_number2
 	inc bx
 
-	call file_new_line
-	inc values_i
-
 	mov  al,[bx]
-	call fprint_number
+	call fprint_number2
 	inc bx
 
-	call file_new_line
-	inc values_i
+	mov  al,[bx]
+	call fprint_number2
 
 	mov  al,[bx]
-	call fprint_number
-
-	call file_new_line
-	inc values_i
-
-	mov  al,[bx]
-	call fprint_number
-
-	call file_new_line
-	inc values_i
+	call fprint_number2
 
 	ret
 print_sums_to_file endp
@@ -299,6 +287,63 @@ print_number proc near
 
 	ret
 print_number endp
+
+;================================
+; FPRINT_NUMBER2 (number enters at AL)
+;================================
+;; The same function, but printing two zeroes for no reason.
+fprint_number2 proc near
+	push	ax
+	push 	bx
+	push	cx
+	push	dx
+
+	mov		bl, al
+
+	mov		cl,4 ;; 8 bits, prints two 4-bit values
+	shr		al,cl
+	push	ax
+	push	bx
+	push	cx
+		call	file_add_zero
+		call	fprint_digit
+	pop		cx
+	pop		bx
+	pop		ax
+	shl		al,cl
+	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
+	mov		al,bl
+
+	call	file_new_line
+	inc		values_i
+	cmp		values_i,4
+	jnz		not_over
+
+	mov		values_i, 0
+
+not_over:
+
+	call	file_add_zero
+	call	fprint_digit
+
+	call	file_new_line
+	inc		values_i
+	cmp		values_i,4
+	jnz		not_over2
+
+	mov		values_i, 0
+
+not_over2:
+
+
+	pop		dx
+	pop		cx
+	pop 	bx
+	pop		ax
+
+	ret
+fprint_number2 endp
+
 
 ;================================
 ; FPRINT_NUMBER (number enters at AL)
@@ -494,12 +539,34 @@ write_outfile proc near
 
 	call fprint_number
 
-	cmp values_i, 3
-
 	call file_new_line
 
 	ret
 write_outfile endp
+
+;================================
+; file_add_zero
+;================================
+file_add_zero proc near
+	push ax
+	push bx
+	push cx
+	push dx
+		lea		di, file_buffer ;; we need to write using a buffer.
+		mov		byte ptr [di], '0' ;; character in the buffer
+		lea		dx, file_buffer ;; we need to write using a buffer.
+		mov		cx, 1 			;; one byte to write.
+		mov		bx, out_filehandle
+		mov 	ah, 40h
+		int		21h
+	pop	dx
+	pop dx
+	pop bx
+	pop ax
+
+	ret
+file_add_zero endp
+
 
 ;================================
 ; file_new_line
@@ -509,8 +576,8 @@ file_new_line proc near
 	push bx
 	push cx
 	push dx
-		cmp values_i, 3
-		jnz not_newline
+		cmp values_i,3
+		jc not_newline
 
 
 		lea		di, file_buffer ;; we need to write using a buffer.
