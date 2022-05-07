@@ -8,20 +8,26 @@ LF		equ		10
 .data
 	text_intro 		db "Digite o nome do arquivo (max:12)",CR,LF,">>> ",0
 	text_file  		db CR,LF,"Arquivo Escolhido: ", 0
-	text_openerr	db CR,LF,"Erro ao tentar abrir o arquivo!",CR,LF,0
-	text_opensuc	db CR,LF,"Sucesso ao abrir o arquivo!",CR,LF,0
+	text_openerr	db CR,LF,"Erro ao abrir arquivos!",CR,LF,0
+	text_inerr		db CR,LF,"Erro ao abrir o arquivo de entrada!",CR,LF,0
+	text_opensuc	db CR,LF,"Sucesso ao abrir os arquivos!",CR,LF,0
+	text_outerr		db CR,LF,"Erro ao abrir o arquivo de saida!",CR,LF,0
 	text_digiterr	db CR,LF,"Digito Invalido!",CR,LF,0
 	text_parseerr	db CR,LF,"Erro ao ler o arquivo ",CR,LF,0
 	text_space		db " ",0
 	text_charreport db CR,LF," Novo Byte: ",0
-	text_outfileis  db CR,LF,"O arquivo de saída eh: ",0
+	text_outfileis  db CR,LF,"O arquivo de saida eh: ",0
 	text_eof		db CR,LF,"EOF!",CR,LF,0
 	text_outext		db ".res",0
-	values			dw 0,0,0,0
+
+	values			db 0,0,0,0
+	values_i		dw 0
 
 	file_handle		dw 0
 	filename 		db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	out_filename	db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	out_filename_t	db "a.out",0
+	out_filehandle	dw 0
 
 	file_buffer		db 0,0,0
 
@@ -55,14 +61,22 @@ LF		equ		10
 	call	print_string
 
 	;;------------------------------
-	;; Opening the file and checking
+	;; Opening the files and checking
 	;;------------------------------
 	call 	open_file
 
 	lea		di, file_handle
 	cmp		[di],0
+	jz		main_open_fail
 
-	jnz		main_open_success
+	call	open_outfile
+	lea		di, out_filehandle
+	cmp		[di],0
+	jz		main_open_fail
+
+	jmp		main_open_success
+
+main_open_fail:
 	lea		bx , text_openerr
 	call	print_string
 	jmp 	end_main
@@ -84,23 +98,15 @@ main_open_success:
 
 
 end_main:
-	mov		al, 7AH
-	call print_number
+	lea bx,values
 
+	mov bx, 0
+	mov cx, 0
+
+	mov al, byte ptr [values + bx]
+	call print_number
 	call print_space
 
-	mov		ax,3
-	call print_number
-
-	call print_space
-
-	mov		ax,5
-	call print_number
-
-	call print_space
-
-	mov		ax,11
-	call print_number
 
 .exit
 
@@ -124,6 +130,8 @@ parsefile_readnext:
 	cmp ax,0				;; number of bytes actually read.
 	jz	parsefile_eof
 
+	lea	bx, file_buffer
+	mov	al, [bx]
 	call sumchar
 
 	;; Printing the char for test purpouses.
@@ -155,9 +163,23 @@ parse_file endp
 ; SUMCHAR	 (al=char)
 ; checks if the char does contribute in the sum
 ; sums at one of the four values accordingly.
+; prints it at the file too.
 ;================================
 sumchar proc near
 
+	cmp al,7EH ; último caractere de controle é 0x1F, e o primeiro visível é 0x20
+	jnc sumchar_invalid
+
+	cmp values_i,3 ; A ordem é 0,1,2,3,0,1,2,3 ... Reseta do 3 pro 0.
+	jnz sumchar_nao_overflow
+	mov	values_i,0
+sumchar_nao_overflow:
+
+	lea bx,values
+	add bx,values_i
+	add [bx], al
+
+	add values_i,1
 
 sumchar_invalid:
 sumchar_end:
@@ -286,8 +308,30 @@ make_outfile_name endp
 ; OPEN_OUTFILE ()
 ;================================
 open_outfile proc near
+	mov		ah, 3CH
+	mov		cl, 0 	;; escrita
+	lea		dx,out_filename
+
+	int		21H
+
+	jnc		openo_success
+
+	lea		di, out_filehandle
+	mov		[di], 0
+
+	lea  bx,text_outerr
+	call print_string
+	jmp		openo_end
+openo_success:
+	lea		di, out_filehandle
+	mov		[di], ax
+openo_end:
 	ret
 open_outfile endp
+;================================
+; WRITE_OUTFILE (ax=)
+;================================
+
 ;================================
 ; OPEN_FILE	(file_handle=0 if failure)
 ;================================
@@ -305,6 +349,9 @@ open_file proc near
 
 	lea		di, file_handle
 	mov		[di], 0
+	lea  bx,text_inerr ;; string para teste.
+	call print_string
+
 	jmp		open_end
 
 open_success:
