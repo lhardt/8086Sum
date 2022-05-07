@@ -84,18 +84,11 @@ main_open_fail:
 	;; Parsing the file.
 	;;------------------------------
 main_open_success:
+	lea		bx , text_opensuc
+	call	print_string
 
-	mov		ah,40h
-	mov		bx,out_filehandle
-	mov		cx,20
-	mov		dx, offset text_opensuc
-	int 	21h
-
-;	lea		bx, text_opensuc
-;	call	fprint_string
-
-;	lea		bx , text_opensuc
-;	call	print_string
+	mov		al, 19H
+	call    fprint_number
 
 ;	call 	parse_file
 
@@ -111,9 +104,16 @@ end_main:
 	mov bx, 0
 	mov cx, 0
 
+print_nums_loop:
+
 	mov al, byte ptr [values + bx]
 	call print_number
 	call print_space
+
+	inc bx
+
+	cmp bx,4
+	jnz print_nums_loop
 
 
 .exit
@@ -140,7 +140,16 @@ parsefile_readnext:
 
 	lea	bx, file_buffer
 	mov	al, [bx]
-	call sumchar
+
+	push ax
+	push bx
+	push cx
+	push dx
+		call sumchar
+	pop	 dx
+	pop	 cx
+	pop	 bx
+	pop  ax
 
 	;; Printing the char for test purpouses.
 		lea	bx,text_charreport
@@ -177,7 +186,6 @@ sumchar proc near
 
 	cmp al,7FH ; último caractere de controle é 0x1F, e o primeiro visível é 0x20
 	jnc sumchar_invalid
-
 
 	lea bx,values
 	add bx,values_i
@@ -242,6 +250,7 @@ print_number endp
 ;================================
 ;; prints in base 16, in the outfile, and with trailing zeroes.
 fprint_number proc near
+	push	ax
 	push 	bx
 	push	cx
 
@@ -249,14 +258,18 @@ fprint_number proc near
 
 	mov		cl,4 ;; 8 bits, prints two 4-bit values
 	shr		al,cl
+	push	ax
 	call	fprint_digit
+	pop		ax
 	shl		al,cl
 	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
 	mov		al,bl
+
 	call	fprint_digit
 
 	pop		cx
 	pop 	bx
+	pop		ax
 
 	ret
 fprint_number endp
@@ -272,7 +285,7 @@ print_digit proc near
 	cmp 	al, 16
 	jnc print_digit_too_large
 
-	cmp 	al,9
+	cmp 	al,10
 	jnc 	print_digit_letter
 
 print_digit_number:
@@ -305,13 +318,16 @@ print_digit endp
 ;================================
 ;; prints a single 'digit' in base 16 at the outfile.
 fprint_digit proc near
+	push ax
 	push bx
+	push cx
 	push dx
+	push di
 
 	cmp 	al, 16
 	jnc fprint_digit_too_large
 
-	cmp 	al,9
+	cmp 	al,10
 	jnc 	fprint_digit_letter
 
 fprint_digit_number:
@@ -324,11 +340,10 @@ fprint_digit_letter:
 fprint_digit_print:
 	add 	al, dl ;; so AL is the character to print
 
+
 	lea		di, file_buffer ;; we need to write using a buffer.
 	mov		byte ptr [di], al ;; character in the buffer
 	lea		dx, file_buffer ;; we need to write using a buffer.
-
-
 	mov		cx, 1 			;; one byte to write.
 	mov		bx, out_filehandle
 
@@ -337,14 +352,16 @@ fprint_digit_print:
 
 	jmp fprint_digit_end
 
-
 fprint_digit_too_large:
 	lea 	bx,text_digiterr
 	call 	print_string
 
 fprint_digit_end:
+	pop		di
 	pop 	dx
+	pop		cx
 	pop 	bx
+	pop		ax
 	ret
 fprint_digit endp
 
@@ -417,17 +434,17 @@ write_outfile proc near
 
 	call fprint_number
 
-	cmp values_i, 3
-	jnz write_not_newline
+;	cmp values_i, 3
+;	jnz write_not_newline
 
-	push ax
+;	push ax
 
-	mov al, CR
-	call write_outfile
-	mov al, LF
-	call write_outfile
+;	mov al, CR
+;	call write_outfile
+;	mov al, LF
+;	call write_outfile
 
-	pop ax
+;	pop ax
 
 
 write_not_newline:
@@ -516,24 +533,18 @@ read_filename endp
 ;================================
 fprint_string 	proc near
 fprint_start:
-
 	mov		dl, [bx]
 	cmp		dl, 0
 	je fprint_end
 
 	push	bx
 	push	cx
-
-		;mov		dx,bx ; dx must point to string
-		lea		dx, text_openerr
-
-		lea		bx,out_filehandle
+		mov		dx,bx ; dx must point to string
+		mov		bx,out_filehandle
 		mov		cx,1  ; n_bytes to write
-
 
 		mov		ah,40h
 		int 	21H
-
 	pop		cx
 	pop		bx
 
