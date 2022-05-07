@@ -14,7 +14,9 @@ LF		equ		10
 	text_outerr		db CR,LF,"Erro ao abrir o arquivo de saida!",CR,LF,0
 	text_digiterr	db CR,LF,"Digito Invalido!",CR,LF,0
 	text_parseerr	db CR,LF,"Erro ao ler o arquivo ",CR,LF,0
+	text_nread		db CR,LF,"Num Bytes Lidos: 0x",0
 	text_space		db " ",0
+	text_sums		db CR,LF,"Somas: ",0
 	text_charreport db CR,LF," Novo Byte: ",0
 	text_outfileis  db CR,LF,"O arquivo de saida eh: ",0
 	text_eof		db CR,LF,"EOF!",CR,LF,0
@@ -22,6 +24,8 @@ LF		equ		10
 
 	values			db 0,0,0,0
 	values_i		dw 0
+
+	n_read_bytes	db 0
 
 	file_handle		dw 0
 	filename 		db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -87,19 +91,22 @@ main_open_success:
 	lea		bx , text_opensuc
 	call	print_string
 
-	mov		al, 19H
-	call    fprint_number
-
-;	call 	parse_file
+	call 	parse_file
 
 	;;------------------------------
 	;; Printing the results.
 	;;------------------------------
-
-
-
 end_main:
-	lea bx,values
+	lea		bx,text_nread
+	call	print_string
+
+	mov		al,n_read_bytes
+	call 	print_number
+
+	lea		bx,text_sums
+	call	print_string
+
+	call print_sums_to_file
 
 	mov bx, 0
 	mov cx, 0
@@ -107,17 +114,50 @@ end_main:
 print_nums_loop:
 
 	mov al, byte ptr [values + bx]
-	call print_number
-	call print_space
+	push bx
+		call print_number
+		call print_space
+	pop bx
 
 	inc bx
-
 	cmp bx,4
 	jnz print_nums_loop
-
-
 .exit
 
+;================================
+; print_sums_to_file
+;================================
+print_sums_to_file proc near
+	lea bx,values
+
+	mov  al,[bx]
+	call fprint_number
+	inc bx
+
+	call file_new_line
+	inc values_i
+
+	mov  al,[bx]
+	call fprint_number
+	inc bx
+
+	call file_new_line
+	inc values_i
+
+	mov  al,[bx]
+	call fprint_number
+
+	call file_new_line
+	inc values_i
+
+	mov  al,[bx]
+	call fprint_number
+
+	call file_new_line
+	inc values_i
+
+	ret
+print_sums_to_file endp
 ;================================
 ; PARSE_FILE  (no params, everything is global)
 ;================================
@@ -140,6 +180,13 @@ parsefile_readnext:
 
 	lea	bx, file_buffer
 	mov	al, [bx]
+	;; Printing the char for test purpouses.
+	;	lea	bx,text_charreport
+	;	call print_string
+	;
+	;	lea	bx, file_buffer
+	;	mov	al, [bx]
+	;	call print_number
 
 	push ax
 	push bx
@@ -150,14 +197,6 @@ parsefile_readnext:
 	pop	 cx
 	pop	 bx
 	pop  ax
-
-	;; Printing the char for test purpouses.
-		lea	bx,text_charreport
-		call print_string
-
-		lea	bx, file_buffer
-		mov	al, [bx]
-		call print_number
 
 	jmp parsefile_readnext
 
@@ -187,6 +226,8 @@ sumchar proc near
 	cmp al,7FH ; último caractere de controle é 0x1F, e o primeiro visível é 0x20
 	jnc sumchar_invalid
 
+	inc n_read_bytes
+
 	lea bx,values
 	add bx,values_i
 	add byte ptr [bx], al
@@ -194,7 +235,7 @@ sumchar proc near
 	call write_outfile
 
 	add values_i,1
-	cmp values_i,3 ; A ordem é 0,1,2,3,0,1,2,3 ... Reseta do 3 pro 0.
+	cmp values_i,4 ; A ordem é 0,1,2,3,0,1,2,3 ... Reseta do 3 pro 0.
 	jnz sumchar_nao_overflow
 	mov	values_i,0
 sumchar_nao_overflow:
@@ -226,21 +267,35 @@ print_space endp
 ;================================
 ;; prints in base 16, and with trailing zeroes.
 print_number proc near
+	push	ax
 	push 	bx
 	push	cx
+	push	dx
 
 	mov		bl, al
 
 	mov		cl,4 ;; 8 bits, prints two 4-bit values
 	shr		al,cl
-	call	print_digit
+
+	push	ax
+	push	bx
+	push	cx
+		call	print_digit
+	pop		cx
+	pop		bx
+	pop		ax
+
 	shl		al,cl
 	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
 	mov		al,bl
 	call	print_digit
 
+	pop		dx
 	pop		cx
 	pop 	bx
+	pop		ax
+
+
 
 	ret
 print_number endp
@@ -253,13 +308,18 @@ fprint_number proc near
 	push	ax
 	push 	bx
 	push	cx
+	push	dx
 
 	mov		bl, al
 
 	mov		cl,4 ;; 8 bits, prints two 4-bit values
 	shr		al,cl
 	push	ax
-	call	fprint_digit
+	push	bx
+	push	cx
+		call	fprint_digit
+	pop		cx
+	pop		bx
 	pop		ax
 	shl		al,cl
 	sub		bl,al	;; (XXXX) - (XX00) = (00XX)
@@ -267,6 +327,7 @@ fprint_number proc near
 
 	call	fprint_digit
 
+	pop		dx
 	pop		cx
 	pop 	bx
 	pop		ax
@@ -339,7 +400,6 @@ fprint_digit_letter:
 
 fprint_digit_print:
 	add 	al, dl ;; so AL is the character to print
-
 
 	lea		di, file_buffer ;; we need to write using a buffer.
 	mov		byte ptr [di], al ;; character in the buffer
@@ -434,23 +494,49 @@ write_outfile proc near
 
 	call fprint_number
 
-;	cmp values_i, 3
-;	jnz write_not_newline
+	cmp values_i, 3
 
-;	push ax
-
-;	mov al, CR
-;	call write_outfile
-;	mov al, LF
-;	call write_outfile
-
-;	pop ax
-
-
-write_not_newline:
+	call file_new_line
 
 	ret
 write_outfile endp
+
+;================================
+; file_new_line
+;================================
+file_new_line proc near
+	push ax
+	push bx
+	push cx
+	push dx
+		cmp values_i, 3
+		jnz not_newline
+
+
+		lea		di, file_buffer ;; we need to write using a buffer.
+		mov		byte ptr [di], CR ;; character in the buffer
+		lea		dx, file_buffer ;; we need to write using a buffer.
+		mov		cx, 1 			;; one byte to write.
+		mov		bx, out_filehandle
+		mov 	ah, 40h
+		int		21h
+
+		lea		di, file_buffer ;; we need to write using a buffer.
+		mov		byte ptr [di], LF ;; character in the buffer
+		lea		dx, file_buffer ;; we need to write using a buffer.
+		mov		cx, 1 			;; one byte to write.
+		mov		bx, out_filehandle
+		mov 	ah, 40h
+		int		21h
+
+not_newline:
+	pop	dx
+	pop dx
+	pop bx
+	pop ax
+
+	ret
+file_new_line endp
 
 ;================================
 ; OPEN_FILE	(file_handle=0 if failure)
@@ -564,7 +650,6 @@ fprint_string endp
 ;================================
 print_string 	proc near
 print_start:
-
 	mov		dl, [bx]
 	cmp		dl, 0
 	je print_end
